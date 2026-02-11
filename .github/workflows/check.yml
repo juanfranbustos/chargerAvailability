@@ -21,5 +21,10 @@ jobs:
         run: npm install
 
       - name: Run script
+        env:
+            TOMTOM_API_KEY: ${{ secrets.TOMTOM_API_KEY }}
+            CHARGER_ID: ${{ secrets.CHARGER_ID }}
+            TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+            TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: node checkCharger.js
 
