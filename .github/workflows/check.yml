@@ -2,7 +2,7 @@ name: Check Charger Availability
 
 on:
   schedule:
-    - cron: "*/1 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 jobs:
@@ -26,5 +26,19 @@ jobs:
             CHARGER_ID: ${{ secrets.CHARGER_ID }}
             TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
             TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: node checkCharger.js
+        run: |
+          for i in {1..5}
+          do
+            echo "Execution $i"
+            node checkCharger.js
+            sleep 60
+          done
+
+      - name: Commit state if changed
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add state.json || true
+          git diff --cached --quiet || git commit -m "Update state"
+          git push
 
