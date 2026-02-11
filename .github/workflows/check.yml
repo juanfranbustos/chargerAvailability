@@ -1,5 +1,9 @@
 name: Check Charger Availability
 
+concurrency:
+  group: charger-check
+  cancel-in-progress: true
+
 on:
   schedule:
     - cron: "*/5 * * * *"
