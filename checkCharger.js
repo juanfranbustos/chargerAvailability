@@ -31,6 +31,10 @@ async function checkCharger() {
         await sendTelegram(
             `⚡ CARGADOR LIBRE\nHay ${available} conector(es) disponibles`
         );
+    } else {
+        await sendTelegram(
+            `⚡ NO HAY CARGADOR LIBRE\nHay ${available} conector(es) disponibles`
+        );
     }
 }
 
