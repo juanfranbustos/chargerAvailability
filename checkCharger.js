@@ -1,4 +1,5 @@
 import fetch from "node-fetch";
+import fs from "fs";
 
 const TOMTOM_API_KEY = process.env.TOMTOM_API_KEY;
 const CHARGER_ID = process.env.CHARGER_ID;
