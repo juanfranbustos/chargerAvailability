@@ -35,7 +35,7 @@ async function checkCharger() {
         );
     } else {
         await sendTelegram(
-            `⚡🔴 CARGADOR OCUPADO\nHay ${ocupiied} conector(es) ocupado\n Hay ${reserved} cargadores reservados`
+            `⚡🔴 CARGADOR OCUPADO\nHay ${occupied} conector(es) ocupado\n Hay ${reserved} cargadores reservados`
         );
     }
 }
