@@ -33,11 +33,11 @@ async function checkCharger() {
         await sendTelegram(
             `⚡🟢 CARGADOR LIBRE\nHay ${available} conector(es) disponibles`
         );
-    } else {
+    } /*else {
         await sendTelegram(
             `⚡🔴 CARGADOR OCUPADO\nHay ${occupied} conector(es) ocupado\n Hay ${reserved} cargadores reservados`
         );
-    }
+    }*/
 }
 
 checkCharger().catch(console.error);
