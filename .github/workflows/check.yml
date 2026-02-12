@@ -38,11 +38,3 @@ jobs:
             sleep 60
           done
 
-      - name: Commit state if changed
-        run: |
-          git config user.name "juanfranbustos"
-          git config user.email "juanfranbustosc@gmail.com"
-          git add state.json || true
-          git diff --cached --quiet || git commit -m "Update state"
-          git push
-
