@@ -23,15 +23,21 @@ async function checkCharger() {
     const res = await fetch(url);
     const data = await res.json();
 
-    const available = data?.connectors?.available ?? 0;
+    const available = data.connectors[0].availability.current.available ?? 0;
+    const occupied = data.connectors[0].availability.current.occupied ?? 0;
+    const reserved = data.connectors[0].availability.current.reserved ?? 0;
 
     console.log("Available connectors:", available);
 
     if (available >= 1) {
         await sendTelegram(
-            `⚡ CARGADOR LIBRE\nHay ${available} conector(es) disponibles`
+            `⚡🟢 CARGADOR LIBRE\nHay ${available} conector(es) disponibles`
         );
-    } 
+    } else {
+        await sendTelegram(
+            `⚡🔴 CARGADOR OCUPADO\nHay ${ocupiied} conector(es) ocupado\n Hay ${reserved} cargadores reservados`
+        );
+    }
 }
 
 checkCharger().catch(console.error);
