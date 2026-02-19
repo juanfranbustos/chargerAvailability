@@ -63,7 +63,7 @@ async function checkCharger() {
 
     console.log("Available connectors:", available);
 
-    if (available >= 1) {
+    if (available >= 1 && available!=previous) {
         await sendTelegram(
             `⚡🟢 CARGADOR LIBRE\nHay ${available} conector(es) disponibles`
         );
