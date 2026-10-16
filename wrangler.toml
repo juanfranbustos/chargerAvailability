@@ -1,0 +1,16 @@
+name = "charger-watcher"
+main = "src/worker.js"
+compatibility_date = "2026-10-01"
+
+[triggers]
+crons = ["* * * * *"]
+
+# Crea el namespace con: npx wrangler kv namespace create STATE
+# y pega aquí el id que te devuelve
+[[kv_namespaces]]
+binding = "STATE"
+id = "4417b251bd1341ad9f137b458a8dbfb2"
+
+[vars]
+CHARGER_NAME = "Cargador"
+NOTIFY_WHEN_OCCUPIED = "false"

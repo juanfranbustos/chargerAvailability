@@ -1,7 +1,18 @@
 {
     "name": "charger-watcher",
+    "private": true,
     "type": "module",
-    "dependencies": {
-        "node-fetch": "^3.3.2"
+    "engines": {
+        "node": ">=22"
+    },
+    "scripts": {
+        "start": "node src/server.js",
+        "check": "node --env-file=.env src/server.js --once",
+        "dev": "node --env-file=.env src/server.js",
+        "cf:deploy": "wrangler deploy",
+        "cf:test": "wrangler dev --test-scheduled"
+    },
+    "devDependencies": {
+        "wrangler": "^4.151.1"
     }
 }
