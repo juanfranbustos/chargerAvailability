@@ -15,9 +15,10 @@ Sin dependencias: Node 22+ o Cloudflare Workers.
 | `TELEGRAM_CHAT_ID` | sí | |
 | `CHARGER_NAME` | no | nombre que aparece en el mensaje |
 | `NOTIFY_WHEN_OCCUPIED` | no | `true` para avisar también cuando vuelve a estar ocupado |
-| `CHECK_INTERVAL_SECONDS` | no | solo en modo servidor, por defecto `60` |
+| `CHECK_INTERVAL_SECONDS` | no | segundos entre consultas, por defecto `60` (en Cloudflare está a `36`) |
 
-> El plan gratuito de TomTom permite unas 2.500 peticiones/día: una por minuto (1.440/día) cabe de sobra; cada 30 s no.
+> El plan gratuito de TomTom permite 2.500 peticiones/día. Con 36 s salen 2.400/día, dejando margen para pruebas;
+> por debajo de 35 s te quedarías sin cuota antes de acabar el día.
 
 ## En local
 
@@ -39,7 +40,7 @@ npx wrangler secret put TELEGRAM_CHAT_ID
 npm run cf:deploy
 ```
 
-Se ejecuta cada minuto. Logs: `npx wrangler tail`. Probar en local: `npm run cf:test` y abrir
+El cron despierta al Worker cada minuto y este hace las consultas que tocan en ese minuto (1 o 2 con 36 s). Logs: `npx wrangler tail`. Probar en local: `npm run cf:test` y abrir
 `http://localhost:8787/__scheduled` (las variables en local van en `.dev.vars`, mismo formato que `.env`).
 
 ## Opción B — Railway (o cualquier VPS / Raspberry Pi)

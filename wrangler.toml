@@ -14,3 +14,4 @@ id = "4417b251bd1341ad9f137b458a8dbfb2"
 [vars]
 CHARGER_NAME = "Cargador"
 NOTIFY_WHEN_OCCUPIED = "false"
+CHECK_INTERVAL_SECONDS = "36"
