@@ -15,5 +15,5 @@ id = "4417b251bd1341ad9f137b458a8dbfb2"
 CHARGER_NAME = "Cargador Cid 2 (Ibi)"
 NOTIFY_WHEN_OCCUPIED = "false"
 CHECK_INTERVAL_SECONDS = "36"
-# Cargador E-A-Ibi-003 en REVE (Red Eléctrica): confirma el estado antes de avisar
-REVE_LOCATION_ID = "d3de90ea-32d3-457e-90a3-8bc423f645a2"
+# Enlace del botón "Cómo llegar" del aviso
+CHARGER_MAPS_URL = "https://www.google.com/maps/dir/?api=1&destination=38.622057,-0.57403"
