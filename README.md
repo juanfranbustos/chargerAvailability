@@ -1,7 +1,8 @@
 # charger-watcher
 
 Consulta la disponibilidad de un cargador en TomTom y avisa por Telegram cuando pasa de ocupado a libre
-(y opcionalmente al revés). Si TomTom falla 5 veces seguidas también avisa, y otra vez cuando se recupera.
+(y opcionalmente al revés). Antes de avisar lo confirma con [REVE](https://www.mapareve.es) (Red Eléctrica), que recibe
+el estado de cada toma directamente del operador. Si TomTom falla 5 veces seguidas también avisa, y otra vez cuando se recupera.
 
 Sin dependencias: Node 22+ o Cloudflare Workers.
 
@@ -15,11 +16,21 @@ Sin dependencias: Node 22+ o Cloudflare Workers.
 | `TELEGRAM_CHAT_ID` | sí | |
 | `CHARGER_NAME` | no | nombre que aparece en el mensaje |
 | `NOTIFY_WHEN_OCCUPIED` | no | `true` para avisar también cuando vuelve a estar ocupado |
-| `CHARGER_MAPS_URL` | no | enlace para el botón "📍 Cómo llegar" del aviso |
+| `REVE_LOCATION_ID` | no | id del cargador en REVE; si está, confirma con REVE antes de avisar |
+| `REVE_API_KEY` | no | clave de la API oficial de REVE (5 peticiones/hora); sin ella usa la API pública de su web |
+| `REVE_MIN_INTERVAL_SECONDS` | no | mínimo entre consultas a REVE: `60` sin clave, `720` con clave |
 | `CHECK_INTERVAL_SECONDS` | no | segundos entre consultas, por defecto `60` (en Cloudflare está a `36`) |
 
 > El plan gratuito de TomTom permite 2.500 peticiones/día. Con 36 s salen 2.400/día, dejando margen para pruebas;
 > por debajo de 35 s te quedarías sin cuota antes de acabar el día.
+
+Para encontrar el `REVE_LOCATION_ID`, busca los cargadores de una zona:
+
+```sh
+curl -s -X POST 'https://www.mapareve.es/api/public/v1/locations?page=1&per_page=20' \
+  -H 'content-type: application/json' \
+  -d '{"latitude_ne":38.66,"longitude_ne":-0.53,"latitude_sw":38.60,"longitude_sw":-0.61}'
+```
 
 ## En local
 
