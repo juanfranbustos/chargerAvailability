@@ -1,11 +1,13 @@
-// Lógica común: consulta TomTom, confirma con REVE (Red Eléctrica) y avisa por Telegram.
+// Lógica común: consulta REVE (Red Eléctrica), usa TomTom de respaldo y avisa por Telegram.
 // No depende de Node ni de Cloudflare: el "runner" le pasa el entorno y cómo guardar el estado.
 
 const REQUEST_TIMEOUT_MS = 10_000;
 const ERROR_ALERT_THRESHOLD = 5; // fallos seguidos antes de avisar por Telegram
 
-const REVE_PUBLIC_URL = "https://www.mapareve.es/api/public/v1";
-const REVE_EXTERNAL_URL = "https://www.mapareve.es/api/external/v1";
+// API pública de la web de REVE: sin límite publicado (la oficial con clave solo admite 5 peticiones/hora)
+const REVE_URL = "https://www.mapareve.es/api/public/v1";
+// El plan gratuito de la Search API de TomTom da 2.500 peticiones al mes: ~1 cada 18 min
+const TOMTOM_DEFAULT_MIN_INTERVAL_SECONDS = 1080;
 const REVE_STATUS_LABELS = {
     AVAILABLE: "libre",
     CHARGING: "cargando",
@@ -19,22 +21,24 @@ const REVE_STATUS_LABELS = {
 };
 
 export function readConfig(env) {
-    const reveApiKey = env.REVE_API_KEY || null;
+    const reveLocationId = env.REVE_LOCATION_ID || null;
+    const tomtomEnabled = Boolean(env.TOMTOM_API_KEY && env.CHARGER_ID);
     const config = {
+        reveLocationId,
+        tomtomEnabled,
         tomtomApiKey: env.TOMTOM_API_KEY,
         chargerId: env.CHARGER_ID,
+        // Con REVE, TomTom es solo respaldo y se limita para no agotar la cuota mensual
+        tomtomMinIntervalMs: Number(env.TOMTOM_MIN_INTERVAL_SECONDS
+            || (reveLocationId ? TOMTOM_DEFAULT_MIN_INTERVAL_SECONDS : 0)) * 1000,
         chargerName: env.CHARGER_NAME || "Cargador",
         telegramToken: env.TELEGRAM_TOKEN,
         telegramChatId: env.TELEGRAM_CHAT_ID,
         notifyWhenOccupied: env.NOTIFY_WHEN_OCCUPIED === "true",
-        reveLocationId: env.REVE_LOCATION_ID || null,
-        reveApiKey,
-        // La API oficial admite 5 peticiones/hora; la pública no tiene límite publicado
-        reveMinIntervalMs: Number(env.REVE_MIN_INTERVAL_SECONDS || (reveApiKey ? 720 : 60)) * 1000,
     };
 
-    const missing = ["TOMTOM_API_KEY", "CHARGER_ID", "TELEGRAM_TOKEN", "TELEGRAM_CHAT_ID"]
-        .filter((name) => !env[name]);
+    const missing = ["TELEGRAM_TOKEN", "TELEGRAM_CHAT_ID"].filter((name) => !env[name]);
+    if (!reveLocationId && !tomtomEnabled) missing.push("REVE_LOCATION_ID o TOMTOM_API_KEY + CHARGER_ID");
     if (missing.length > 0) {
         throw new Error(`Faltan variables de entorno: ${missing.join(", ")}`);
     }
@@ -79,12 +83,8 @@ export async function fetchAvailability(config) {
 
 // Estado por toma según REVE, que lo recibe directamente del operador (OCPI)
 export async function fetchReve(config) {
-    const base = config.reveApiKey ? REVE_EXTERNAL_URL : REVE_PUBLIC_URL;
-    const headers = { "User-Agent": "charger-watcher/1.0" };
-    if (config.reveApiKey) headers["x-api-key"] = config.reveApiKey;
-
-    const res = await fetch(`${base}/locations/${encodeURIComponent(config.reveLocationId)}`, {
-        headers,
+    const res = await fetch(`${REVE_URL}/locations/${encodeURIComponent(config.reveLocationId)}`, {
+        headers: { "User-Agent": "charger-watcher/1.0" },
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
     if (!res.ok) throw new Error(`REVE ${res.status}`);
@@ -139,75 +139,79 @@ export async function sendTelegram(config, text, buttons = []) {
     }
 }
 
-// state = { free: boolean | null, errors: number, reveCheckedAt: number }
-// `free` es el último estado del que te hemos avisado (confirmado por REVE si está configurado)
+// REVE primero; si falla, TomTom como respaldo respetando su intervalo mínimo
+async function fetchStatus(config, previous, next, log, now) {
+    let reveError = null;
+    if (config.reveLocationId) {
+        try {
+            const reve = await fetchReve(config);
+            log(`REVE: ${reve.sockets.map((s) => s.status).join(", ")} (avisado: ${previous.free ?? "?"})`);
+            return { source: "reve", ...reve };
+        } catch (err) {
+            reveError = err;
+            log(`Error consultando REVE: ${err.message}`);
+        }
+    }
+
+    if (!config.tomtomEnabled) throw reveError;
+    if (now() - previous.tomtomCheckedAt < config.tomtomMinIntervalMs) {
+        throw new Error(`${reveError.message} (TomTom en espera para no gastar cuota)`);
+    }
+
+    next.tomtomCheckedAt = now();
+    try {
+        const tomtom = await fetchAvailability(config);
+        log(`TomTom: libres ${tomtom.available}/${tomtom.total} (avisado: ${previous.free ?? "?"})`);
+        return { source: "tomtom", ...tomtom };
+    } catch (err) {
+        throw new Error(reveError ? `${reveError.message} · ${err.message}` : err.message);
+    }
+}
+
+function describeStatus(status) {
+    if (status.source === "reve") {
+        return [describeSockets(status.sockets), "✔️ Según Red Eléctrica (REVE)"];
+    }
+    return [
+        `${status.available} de ${status.total} conector(es) disponible(s)`,
+        `Ocupados: ${status.occupied} · Reservados: ${status.reserved} · Fuera de servicio: ${status.outOfService}`,
+        "⚠️ Según TomTom (REVE no responde)",
+    ];
+}
+
+// state = { free: boolean | null, errors: number, tomtomCheckedAt: number }
+// `free` es el último estado del que te hemos avisado
 export async function runCheck({ env, loadState, saveState, log = console.log, now = Date.now }) {
     const config = readConfig(env);
     const loaded = (await loadState()) ?? {};
     const previous = {
         free: loaded.free ?? (loaded.available == null ? null : loaded.available > 0), // estado antiguo {available}
         errors: loaded.errors ?? 0,
-        reveCheckedAt: loaded.reveCheckedAt ?? 0,
+        tomtomCheckedAt: loaded.tomtomCheckedAt ?? 0,
     };
     const next = { ...previous };
     const messages = [];
 
     try {
-        const current = await fetchAvailability(config);
-        log(`TomTom: libres ${current.available}/${current.total} (avisado: ${previous.free ?? "?"})`);
+        const status = await fetchStatus(config, previous, next, log, now);
+        const free = status.available > 0;
 
         if (previous.errors >= ERROR_ALERT_THRESHOLD) {
             messages.push({ text: "✅ Vuelvo a poder consultar el estado del cargador" });
         }
 
-        if (current.available === 0) {
-            if (config.notifyWhenOccupied && previous.free === true) {
-                messages.push({
-                    text: `⚡🔴 ${config.chargerName} OCUPADO\n` +
-                        `Ocupados: ${current.occupied} · Reservados: ${current.reserved} · Fuera de servicio: ${current.outOfService}`,
-                });
-            }
-            next.free = false;
-        } else if (previous.free === null) {
-            next.free = true; // primera ejecución: solo guardamos
-        } else if (previous.free === false) {
-            // TomTom dice que se ha liberado: lo confirmamos con REVE antes de avisar
-            let reve = null;
-            let reveError = null;
-            if (config.reveLocationId && now() - previous.reveCheckedAt >= config.reveMinIntervalMs) {
-                next.reveCheckedAt = now();
-                try {
-                    reve = await fetchReve(config);
-                    log(`REVE: ${reve.sockets.map((s) => s.status).join(", ")}`);
-                } catch (err) {
-                    reveError = err;
-                    log(`Error consultando REVE: ${err.message}`);
-                }
-            }
-
-            if (reve && reve.available === 0) {
-                log("TomTom dice libre pero REVE no: no aviso");
-            } else if (config.reveLocationId && !reve && !reveError) {
-                log("Esperando para volver a consultar REVE");
-            } else {
-                const lines = [`⚡🟢 ${config.chargerName} LIBRE`];
-                if (reve) {
-                    lines.push(describeSockets(reve.sockets), "✔️ Confirmado por Red Eléctrica (REVE)");
-                } else {
-                    lines.push(`${current.available} de ${current.total} conector(es) disponible(s)`);
-                    if (reveError) lines.push("⚠️ Sin confirmar: REVE no responde");
-                }
-                messages.push({
-                    text: lines.join("\n"),
-                    buttons: reve?.mapsUrl ? [{ text: "📍 Cómo llegar", url: reve.mapsUrl }] : [],
-                });
-                next.free = true;
-            }
+        if (previous.free !== null && free !== previous.free && (free || config.notifyWhenOccupied)) {
+            const title = free ? `⚡🟢 ${config.chargerName} LIBRE` : `⚡🔴 ${config.chargerName} OCUPADO`;
+            messages.push({
+                text: [title, ...describeStatus(status)].join("\n"),
+                buttons: free && status.mapsUrl ? [{ text: "📍 Cómo llegar", url: status.mapsUrl }] : [],
+            });
         }
 
+        next.free = free;
         next.errors = 0;
     } catch (err) {
-        log(`Error consultando TomTom: ${err.message}`);
+        log(`Error consultando el cargador: ${err.message}`);
         // Mantenemos el último estado conocido; el contador se limita para no escribir sin parar
         next.errors = Math.min(previous.errors + 1, ERROR_ALERT_THRESHOLD);
         if (previous.errors === ERROR_ALERT_THRESHOLD - 1) {

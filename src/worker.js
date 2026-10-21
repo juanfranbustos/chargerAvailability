@@ -1,6 +1,6 @@
 // Cloudflare Worker: un Cron Trigger lo despierta cada minuto y el estado vive en KV.
 // El cron no baja de 1 minuto, así que en cada ejecución hacemos las comprobaciones que
-// tocan en ese minuto según CHECK_INTERVAL_SECONDS (36 s → 2.400 al día, bajo las 2.500 de TomTom).
+// tocan en ese minuto según CHECK_INTERVAL_SECONDS (45 s → 1 o 2 consultas a REVE por minuto).
 import { runCheck } from "./core.js";
 
 const STATE_KEY = "state";
